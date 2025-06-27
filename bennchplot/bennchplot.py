@@ -30,6 +30,7 @@ try:
 except ImportError:
     import plot_params as pp
 
+plt.rcParams.update(plt.rcParamsDefault)
 
 class Plot():
     """
@@ -62,8 +63,7 @@ class Plot():
                  color_params=pp.color_params,
                  additional_params=pp.additional_params,
                  label_params=pp.label_params,
-                 time_scaling=1,
-                 detailed_timers=True):
+                 time_scaling=1):
 
         self.x_axis = x_axis
         self.x_ticks = x_ticks
@@ -72,10 +72,16 @@ class Plot():
         self.color_params = color_params
         self.label_params = label_params
         self.time_scaling = time_scaling
-        self.detailed_timers = detailed_timers
 
         self.load_data(data_file)
         self.compute_derived_quantities()
+
+        print(self.matplotlib_params)
+        for p in self.matplotlib_params.keys():
+            plt.rcParams[p] = self.matplotlib_params[p]
+
+        plt.rc('text.latex', preamble=r'\usepackage{gensymb}')
+
 
     def load_data(self, data_file):
         """
@@ -93,93 +99,30 @@ class Plot():
         ValueError
         """
         try:
-            self.df = pd.read_csv(data_file, delimiter=',')
+            self.df = pd.read_csv(data_file, delimiter=',', index_col=0)
         except FileNotFoundError:
             print('File could not be found')
             quit()
 
-        for py_timer in ['py_time_create', 'py_time_connect']:
-            if py_timer not in self.df:
-                self.df[py_timer] = np.nan
-                raise ValueError('Warning! Python timers are not found. ' +
-                                 'Construction time measurements will not ' +
-                                 'be accurate.')
-
-        dict_ = {'num_nodes': 'first',
-                 'threads_per_task': 'first',
-                 'tasks_per_node': 'first',
+        dict_ = {'nodes': 'first',
+                 'gpus_per_node': 'first',
                  'model_time_sim': 'first',
-                 'time_construction_create': ['mean', 'std'],
-                 'time_construction_connect': ['mean', 'std'],
+                 'time_configure': ['mean', 'std'],
+                 'time_create_nodes': ['mean', 'std'],
+                 'time_connect_local': ['mean', 'std'],
+                 'time_network_local_tot': ['mean', 'std'],
+                 'time_connect_global': ['mean', 'std'],
+                 'total_constr': ['mean', 'std'],
+                 'time_calibrate': ['mean', 'std'],
+                 'time_presimulate': ['mean', 'std'],
                  'time_simulate': ['mean', 'std'],
-                 'time_communicate_prepare': ['mean', 'std'],
-                 'py_time_create': ['mean', 'std'],
-                 'py_time_connect': ['mean', 'std'],
-                 'base_memory': ['mean', 'std'],
-                 'network_memory': ['mean', 'std'],
-                 'init_memory': ['mean', 'std'],
-                 'total_memory': ['mean', 'std'],
-                 'num_connections': ['mean', 'std'],
-                 'local_spike_counter': ['mean', 'std'],
+                 'sim_factor': ['mean', 'std']
                  }
+        
 
-        col = ['num_nodes', 'threads_per_task', 'tasks_per_node',
-               'model_time_sim', 'time_construction_create',
-               'time_construction_create_std', 'time_construction_connect',
-               'time_construction_connect_std', 'time_simulate',
-               'time_simulate_std',
-               'time_communicate_prepare',
-               'time_communicate_prepare_std',
-               'py_time_create', 'py_time_create_std',
-               'py_time_connect', 'py_time_connect_std',
-               'base_memory', 'base_memory_std',
-               'network_memory', 'network_memory_std',
-               'init_memory', 'init_memory_std',
-               'total_memory', 'total_memory_std',
-               'num_connections', 'num_connections_std',
-               'local_spike_counter', 'local_spike_counter_std']
-
-        if self.detailed_timers:
-            dict_.update({
-                'time_collocate_spike_data': ['mean', 'std'],
-                'time_communicate_spike_data': ['mean', 'std'],
-                'time_deliver_spike_data': ['mean', 'std'],
-                # 'time_update_spike_data': ['mean', 'std'],
-                'time_communicate_target_data': ['mean', 'std'],
-                'time_gather_spike_data': ['mean', 'std'],
-                'time_gather_target_data': ['mean', 'std']})
-
-            col = ['num_nodes', 'threads_per_task', 'tasks_per_node',
-                   'model_time_sim', 'time_construction_create',
-                   'time_construction_create_std', 'time_construction_connect',
-                   'time_construction_connect_std', 'time_simulate',
-                   'time_simulate_std', 'time_collocate_spike_data',
-                   'time_collocate_spike_data_std', 'time_communicate_spike_data',
-                   'time_communicate_spike_data_std', 'time_deliver_spike_data',
-                   'time_deliver_spike_data_std',
-                   # 'time_update_spike_data',
-                   # 'time_update_spike_data_std',
-                   'time_communicate_target_data',
-                   'time_communicate_target_data_std',
-                   'time_gather_spike_data',
-                   'time_gather_spike_data_std',
-                   'time_gather_target_data',
-                   'time_gather_target_data_std',
-                   'time_communicate_prepare',
-                   'time_communicate_prepare_std',
-                   'py_time_create', 'py_time_create_std',
-                   'py_time_connect', 'py_time_connect_std',
-                   'base_memory', 'base_memory_std',
-                   'network_memory', 'network_memory_std',
-                   'init_memory', 'init_memory_std',
-                   'total_memory', 'total_memory_std',
-                   'num_connections', 'num_connections_std',
-                   'local_spike_counter', 'local_spike_counter_std']
-
-        self.df = self.df.drop('rng_seed', axis=1).groupby(
-            ['num_nodes',
-             'threads_per_task',
-             'tasks_per_node',
+        self.df = self.df.groupby(
+            ['nodes',
+             'gpus_per_node',
              'model_time_sim'], as_index=False).agg(dict_)
 
     def compute_derived_quantities(self):
@@ -187,14 +130,10 @@ class Plot():
         Do computations to get parameters needed for plotting.
         """
 
-        self.df['num_nvp'] = (
-            self.df['threads_per_task'] * self.df['tasks_per_node']
-        )
         self.df['model_time_sim'] /= self.time_scaling
-        self.df['sim_factor'] = (self.df['time_simulate']['mean'].values /
-                                 self.df['model_time_sim'].values.flatten())
-        self.df['sim_factor_std'] = (self.df['time_simulate']['std'].values /
-                                     self.df['model_time_sim'].values.flatten())
+        
+        
+        """
         if self.detailed_timers:
             self.df['time_construction_create+time_construction_connect'] = (
                 self.df['py_time_create'] + self.df['py_time_connect'])
@@ -237,32 +176,35 @@ class Plot():
                 self.df['frac_phase_' + phase + '_std'] = (
                     100 * self.df['time_' + phase + '_spike_data' + '_std'] /
                     self.df['time_phase_total'])
+        
         self.df['total_memory_per_node'] = (self.df['total_memory']['mean'].values /
                                             self.df['num_nodes'].values.flatten())
         self.df['total_memory_per_node_std'] = (self.df['total_memory']['std'].values /
                                                 self.df['num_nodes'].values.flatten())
-
+        """
+    
+    """
     def plot_fractions(self, axis, fill_variables,
                        interpolate=False, step=None, log=False, alpha=1.,
                        error=False):
         """
-        Fill area between curves.
+        #Fill area between curves.
 
-        axis : Matplotlib axes object
-        fill_variables : list
-            variables (e.g. timers) to be plotted as fill  between graph and
-            x axis
-        interpolate : bool, default
-            whether to interpolate between the curves
-        step : {'pre', 'post', 'mid'}, optional
-            should the filling be a step function
-        log : bool, default
-            whether the x-axes should have logarithmic scale
-        alpha, int, default
-            alpha value of fill_between plot
-        error : bool
-            whether plot should have error bars
-        """
+        #axis : Matplotlib axes object
+        #fill_variables : list
+        #    variables (e.g. timers) to be plotted as fill  between graph and
+        #    x axis
+        #interpolate : bool, default
+        #    whether to interpolate between the curves
+        #step : {'pre', 'post', 'mid'}, optional
+        #    should the filling be a step function
+        #log : bool, default
+        #    whether the x-axes should have logarithmic scale
+        #alpha, int, default
+        #    alpha value of fill_between plot
+        #error : bool
+        #    whether plot should have error bars
+    """
 
         fill_height = 0
         for fill in fill_variables:
@@ -297,9 +239,10 @@ class Plot():
             axis.tick_params(bottom=False, which='minor')
             axis.get_xaxis().set_major_formatter(
                 matplotlib.ticker.ScalarFormatter())
+    """
 
-    def plot_main(self, quantities, axis, log=(False, False),
-                  error=False, fmt='none', label=None, color=None):
+    def plot_main(self, quantities, axis, log=(False, False), labels=None, colors=None, ecolor=None,
+                  error=False, fmt='none'):
         """
         Main plotting function.
 
@@ -317,28 +260,34 @@ class Plot():
             matplotlib format string (fmt) for defining line style
         """
 
-        for y in quantities:
-            label = self.label_params[y] if label is None else label
-            color = self.color_params[y] if color is None else color
+        print(self.df)
+
+        for dumy, y in enumerate(quantities):
+            label = self.label_params[y] if labels is None else labels[dumy]
+            color = self.color_params[y] if colors is None else colors[dumy]
+            ecolor = self.color_params[y] if colors is None else ecolor
+            
             axis.plot(self.df[self.x_axis],
-                      self.df[y],
+                      self.df[y]['mean'],
                       marker=None,
                       label=label,
                       color=color,
                       linewidth=2)
+
             if error:
                 axis.errorbar(
                     self.df[self.x_axis].values,
-                    self.df[y].values,
-                    yerr=self.df[y + '_std'].values,
+                    self.df[y]['mean'].values,
+                    yerr=self.df[y]['std'].values,
                     marker=None,
                     capsize=3,
                     capthick=1,
                     color=color,
+                    ecolor=ecolor,
                     fmt=fmt)
 
         if self.x_ticks == 'data':
-            axis.set_xticks(self.df[self.x_axis].values)
+            axis.set_xticks(self.df[self.x_axis].values.flatten())
         else:
             axis.set_xticks(self.x_ticks)
 
@@ -347,6 +296,64 @@ class Plot():
         if log[1]:
             axis.tick_params(bottom=False, which='minor')
             axis.set_yscale('log')
+
+
+    def plot_fractions(self, axis, fill_variables,
+                       interpolate=False, step=None, log=False, alpha=1.,
+                       error=False):
+        """
+        Fill area between curves.
+
+        axis : Matplotlib axes object
+        fill_variables : list
+            variables (e.g. timers) to be plotted as fill  between graph and
+            x axis
+        interpolate : bool, default
+            whether to interpolate between the curves
+        step : {'pre', 'post', 'mid'}, optional
+            should the filling be a step function
+        log : bool, default
+            whether the x-axes should have logarithmic scale
+        alpha, int, default
+            alpha value of fill_between plot
+        error : bool
+            whether plot should have error bars
+        """
+
+        fill_height = 0
+        for fill in fill_variables:
+            print(self.df[self.x_axis])
+            axis.fill_between(np.squeeze(self.df[self.x_axis].values.flatten()),
+                              fill_height,
+                              np.squeeze(self.df[fill]['mean']) + fill_height,
+                              label=self.label_params[fill],
+                              facecolor=self.color_params[fill],
+                              interpolate=interpolate,
+                              step=step,
+                              alpha=alpha,
+                              linewidth=0.5,
+                              edgecolor='#444444')
+            if error:
+                axis.errorbar(np.squeeze(self.df[self.x_axis].values.flatten()),
+                              np.squeeze(self.df[fill]['mean']) + fill_height,
+                              yerr=np.squeeze(self.df[fill]['std']),
+                              capsize=3,
+                              capthick=1,
+                              color='k',
+                              fmt='none'
+                              )
+            fill_height += self.df[fill]['mean'].to_numpy()
+
+        if self.x_ticks == 'data':
+            axis.set_xticks(np.squeeze(self.df[self.x_axis]))
+        else:
+            axis.set_xticks(self.x_ticks)
+
+        if log:
+            axis.set_xscale('log')
+            axis.tick_params(bottom=False, which='minor')
+            axis.get_xaxis().set_major_formatter(
+                matplotlib.ticker.ScalarFormatter())
 
     def merge_legends(self, ax1, ax2):
         """
