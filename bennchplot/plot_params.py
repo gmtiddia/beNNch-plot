@@ -85,7 +85,7 @@ label_params = {
     'time_connect_global': 'Remote connection',
     'time_simulate': 'State propagation',
     'time_presimulate': 'Presimulation',
-    'time_calibrate': 'Preparation',
+    'time_calibrate': 'Simulation\npreparation',
     'time_network_local_tot': 'Local node and connection creation',
     'time_area_packing': 'Area packing',
     #'wall_time_phase_total': 'All phases',
