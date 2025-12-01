@@ -111,6 +111,7 @@ class Plot():
                  'time_create_nodes': ['mean', 'std'],
                  'time_connect_local': ['mean', 'std'],
                  'time_network_local_tot': ['mean', 'std'],
+                 'time_area_packing': ['mean', 'std'],
                  'time_connect_global': ['mean', 'std'],
                  'total_constr': ['mean', 'std'],
                  'time_calibrate': ['mean', 'std'],
@@ -124,6 +125,7 @@ class Plot():
             ['nodes',
              'gpus_per_node',
              'model_time_sim'], as_index=False).agg(dict_)
+
 
     def compute_derived_quantities(self):
         """
@@ -265,7 +267,9 @@ class Plot():
         for dumy, y in enumerate(quantities):
             label = self.label_params[y] if labels is None else labels[dumy]
             color = self.color_params[y] if colors is None else colors[dumy]
-            ecolor = self.color_params[y] if colors is None else ecolor
+            ecolor = self.color_params[y] if ecolor is None else ecolor
+
+            print(ecolor)
             
             axis.plot(self.df[self.x_axis],
                       self.df[y]['mean'],
